@@ -1,0 +1,29 @@
+server:
+  port: 8081
+
+spring:
+  datasource:
+    url: jdbc:postgresql://localhost:5432/iot_telemetry
+    username: postgres
+    password: postgres
+  jpa:
+    hibernate:
+      ddl-auto: update
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+  data:
+    redis:
+      host: localhost
+      port: 6379
+
+mqtt:
+  broker: tcp://localhost:1883
+  client-id: ingestion-service
+  topic: "telemetry/#"
+  qos: 1
+  username: ""
+  password: ""
+
+deduplication:
+  ttl-seconds: 3600

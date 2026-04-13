@@ -1,0 +1,41 @@
+server:
+  port: 8082
+
+spring:
+  datasource:
+    url: jdbc:postgresql://localhost:5432/iot_telemetry
+    username: postgres
+    password: postgres
+  jpa:
+    hibernate:
+      ddl-auto: update
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+  data:
+    redis:
+      host: localhost
+      port: 6379
+
+mqtt:
+  broker: tcp://localhost:1883
+  client-id: alerting-service
+  topic: "telemetry/#"
+  qos: 1
+  username: ""
+  password: ""
+
+deduplication:
+  ttl-seconds: 3600
+
+alerting:
+  rules:
+    - sensor: temperature
+      min: 0.0
+      max: 35.0
+    - sensor: humidity
+      min: 20.0
+      max: 80.0
+    - sensor: pressure
+      min: 950.0
+      max: 1050.0

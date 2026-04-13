@@ -1,0 +1,9 @@
+HR Title: Pouzdana obrada IoT telemetrije u mikroservisnoj arhitekturi vođenoj događajima primjenom protokola MQTT
+EN Title: Reliable IoT telemetry processing in an event-driven microservice architecture using the MQTT protocol
+Telemetrija u sustavima Interneta stvari (engl. IoT) predstavlja kontinuirano prikupljanje i slanje mjernih podataka s uređaja (npr. senzora) prema poslužiteljskoj strani radi pohrane, analitike i reakcije u stvarnom vremenu. 
+Za takve sustave ključni su skalabilnost i otpornost na greške mreže i komponenti, pri čemu se često koristi arhitektura vođena događajima (engl. event-driven) i protokol objavi–pretplati (engl. publish–subscribe) kao što je protokol MQTT.
+Osmisliti arhitekturu i implementirati prototip sustava u kojem ESP32 uređaj objavljuje telemetrijske poruke prema MQTT posredniku, a skup mikroservisa asinkrono konzumira i obrađuje događaje. 
+Sustav treba minimalno sadržavati mikroservis za prihvat i pohranu telemetrije i mikroservis za generiranje upozorenja na temelju definiranih pravila. 
+Posebnu pažnju posvetiti pouzdanosti obrade poruka uz odabranu QoS razinu te implementaciji idempotentne obrade i deduplikacije na temelju jedinstvenog identifikatora poruke.
+Identificirati relevantne mjere performansi i pouzdanosti izgrađenog sustava, provesti testove za odabrane scenarije opterećenja i kvarova te rezultate prikazati u prikladnom obliku uz kratku interpretaciju. 
+Definirati konvenciju MQTT tema i oblik poruke te demonstrirati da sustav podržava proširenje na više uređaja korištenjem hijerarhije tema i pretplatničkih uzoraka.
