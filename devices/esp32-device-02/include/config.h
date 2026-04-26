@@ -12,7 +12,10 @@
 #define DEVICE_ID     "esp32-002"
 
 #define TOPIC_TEMPERATURE "telemetry/" DEVICE_ID "/temperature"
-#define TOPIC_PRESSURE    "telemetry/" DEVICE_ID "/pressure"
+#define TOPIC_HUMIDITY    "telemetry/" DEVICE_ID "/humidity"
+
+#define DHT_PIN       4
+#define DHT_TYPE      DHT11
 
 #define BUTTON_PIN    0
 #define LED_PIN       2

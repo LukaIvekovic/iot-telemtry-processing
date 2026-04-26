@@ -3,9 +3,9 @@ server:
 
 spring:
   datasource:
-    url: jdbc:postgresql://localhost:5432/iot_telemetry
-    username: postgres
-    password: postgres
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/iot_telemetry}
+    username: ${SPRING_DATASOURCE_USERNAME:postgres}
+    password: ${SPRING_DATASOURCE_PASSWORD:postgres}
   jpa:
     hibernate:
       ddl-auto: update
@@ -14,11 +14,11 @@ spring:
         dialect: org.hibernate.dialect.PostgreSQLDialect
   data:
     redis:
-      host: localhost
-      port: 6379
+      host: ${SPRING_DATA_REDIS_HOST:localhost}
+      port: ${SPRING_DATA_REDIS_PORT:6379}
 
 mqtt:
-  broker: tcp://localhost:1883
+  broker: ${MQTT_BROKER:tcp://localhost:1883}
   client-id: alerting-service
   topic: "telemetry/#"
   qos: 1
@@ -29,6 +29,7 @@ deduplication:
   ttl-seconds: 3600
 
 alerting:
+  webhook-url: ${ALERTING_WEBHOOK_URL:http://localhost:9000/alert}
   rules:
     - sensor: temperature
       min: 0.0

@@ -4,7 +4,7 @@ import com.iot.ingestion.service.IngestionService;
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
 import org.eclipse.paho.client.mqttv3.*;
-import org.eclipse.paho.client.mqttv3.persist.MemoryPersistence;
+import org.eclipse.paho.client.mqttv3.persist.MqttDefaultFilePersistence;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -43,7 +43,7 @@ public class MqttConfig implements MqttCallbackExtended {
 
     @PostConstruct
     public void connect() throws MqttException {
-        mqttClient = new MqttClient(broker, clientId, new MemoryPersistence());
+        mqttClient = new MqttClient(broker, clientId, new MqttDefaultFilePersistence("/tmp/mqtt-" + clientId));
         mqttClient.setCallback(this);
 
         MqttConnectOptions options = new MqttConnectOptions();

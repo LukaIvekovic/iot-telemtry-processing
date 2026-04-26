@@ -2,15 +2,18 @@
 #include <WiFi.h>
 #include <PubSubClient.h>
 #include <ArduinoJson.h>
+#include <DHT.h>
+#include <time.h>
 #include "config.h"
 
 WiFiClient   wifiClient;
 PubSubClient mqttClient(wifiClient);
+DHT          dht(DHT_PIN, DHT_TYPE);
 
 volatile bool buttonPressed = false;
 unsigned long lastDebounce  = 0;
 const unsigned long DEBOUNCE_MS = 300;
-unsigned long messageCounter = 0;
+static uint32_t msgCounter = 0;
 
 void IRAM_ATTR onButtonPress() {
     unsigned long now = millis();
@@ -33,6 +36,19 @@ void connectWiFi() {
     Serial.printf("\n[WiFi] Connected — IP: %s\n", WiFi.localIP().toString().c_str());
 }
 
+void syncNTP() {
+    configTime(0, 0, "pool.ntp.org", "time.google.com");
+    Serial.print("[NTP] Waiting for time sync");
+    struct tm timeInfo;
+    while (!getLocalTime(&timeInfo, 10000)) {
+        Serial.print(".");
+        delay(500);
+    }
+    Serial.printf("\n[NTP] Time synced: %04d-%02d-%02dT%02d:%02d:%02dZ\n",
+        timeInfo.tm_year + 1900, timeInfo.tm_mon + 1, timeInfo.tm_mday,
+        timeInfo.tm_hour, timeInfo.tm_min, timeInfo.tm_sec);
+}
+
 void connectMQTT() {
     while (!mqttClient.connected()) {
         Serial.print("[MQTT] Connecting to broker... ");
@@ -51,8 +67,9 @@ void connectMQTT() {
 }
 
 String generateMsgId() {
-    messageCounter++;
-    return String(DEVICE_ID) + "-" + String(millis()) + "-" + String(messageCounter);
+    long long now_ms = (long long)time(nullptr) * 1000LL;
+    msgCounter++;
+    return String(DEVICE_ID) + "-" + String(now_ms) + "-" + String(msgCounter);
 }
 
 void publishReading(const char* topic, const char* sensorType,
@@ -66,7 +83,7 @@ void publishReading(const char* topic, const char* sensorType,
     doc["sensor"]    = sensorType;
     doc["value"]     = value;
     doc["unit"]      = unit;
-    doc["timestamp"] = millis();
+    doc["timestamp"] = (long long)time(nullptr) * 1000LL;
 
     char payload[256];
     serializeJson(doc, payload, sizeof(payload));
@@ -77,11 +94,17 @@ void publishReading(const char* topic, const char* sensorType,
                   topic, payload, MQTT_QOS, ok ? "sent" : "FAILED");
 }
 
-void simulateAndPublish() {
+void readAndPublish() {
     digitalWrite(LED_PIN, HIGH);
 
-    float temperature = random(180, 350) / 10.0;
-    float humidity    = random(300, 800) / 10.0;
+    float temperature = dht.readTemperature();
+    float humidity    = dht.readHumidity();
+
+    if (isnan(temperature) || isnan(humidity)) {
+        Serial.println("[DHT] Read failed, skipping publish");
+        digitalWrite(LED_PIN, LOW);
+        return;
+    }
 
     publishReading(TOPIC_TEMPERATURE, "temperature", temperature, "°C");
     publishReading(TOPIC_HUMIDITY,    "humidity",    humidity,    "%");
@@ -104,9 +127,11 @@ void setup() {
     attachInterrupt(digitalPinToInterrupt(BUTTON_PIN), onButtonPress, FALLING);
 
     connectWiFi();
+    syncNTP();
+
     mqttClient.setServer(MQTT_BROKER, MQTT_PORT);
 
-    randomSeed(analogRead(0) ^ micros());
+    dht.begin();
 
     Serial.println("[Ready] Press the BOOT button to publish a reading.\n");
 }
@@ -122,6 +147,6 @@ void loop() {
 
     if (buttonPressed) {
         buttonPressed = false;
-        simulateAndPublish();
+        readAndPublish();
     }
 }

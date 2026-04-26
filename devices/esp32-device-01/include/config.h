@@ -14,8 +14,11 @@
 #define TOPIC_TEMPERATURE "telemetry/" DEVICE_ID "/temperature"
 #define TOPIC_HUMIDITY    "telemetry/" DEVICE_ID "/humidity"
 
-#define BUTTON_PIN    0  
-#define LED_PIN       2 
+#define DHT_PIN       4
+#define DHT_TYPE      DHT11
+
+#define BUTTON_PIN    0
+#define LED_PIN       2
 
 #define MQTT_QOS      1
 
