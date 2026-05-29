@@ -4,12 +4,12 @@
 #define WIFI_SSID     "YOUR_WIFI_SSID"
 #define WIFI_PASSWORD "YOUR_WIFI_PASSWORD"
 
-#define MQTT_BROKER   "YOUR_BROKER_IP"  
+#define MQTT_BROKER   "YOUR_BROKER_IP"
 #define MQTT_PORT     1883
-#define MQTT_USER     ""           
+#define MQTT_USER     ""
 #define MQTT_PASSWORD ""
 
-#define DEVICE_ID     "esp32-001"
+#define DEVICE_ID     "esp32-003"
 
 #define TOPIC_TEMPERATURE "telemetry/" DEVICE_ID "/temperature"
 #define TOPIC_HUMIDITY    "telemetry/" DEVICE_ID "/humidity"

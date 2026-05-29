@@ -4,15 +4,15 @@
 
 ```mermaid
 graph TD
-    ESP1[ESP32 #1<br>Sensor] -->|MQTT publish<br>QoS 1/2| Broker[MQTT Broker<br>Mosquitto]
-    ESP2[ESP32 #2<br>Sensor] -->|MQTT publish<br>QoS 1/2| Broker
-    ESPN[ESP32 #N<br>Sensor] -->|MQTT publish<br>QoS 1/2| Broker
+    ESP1[ESP32 #1<br>DHT11 + Switch] -->|MQTT publish<br>QoS 1/2| Broker[MQTT Broker<br>Mosquitto]
+    ESP2[ESP32 #2<br>DHT11 + Switch] -->|MQTT publish<br>QoS 1/2| Broker
+    ESP3[ESP32 #3<br>DHT11 + Switch] -->|MQTT publish<br>QoS 1/2| Broker
 
     Broker -->|subscribe<br>telemetry/#| Ingestion[Ingestion Microservice]
     Broker -->|subscribe<br>telemetry/#| Alerting[Alerting Microservice]
 
     Ingestion --> Redis[(Redis<br>Dedup Seen-Set)]
-    Ingestion --> TSDB[(Time-Series DB<br>InfluxDB / TimescaleDB)]
+    Ingestion --> TSDB[(Time-Series DB<br>TimescaleDB hypertable)]
 
     Alerting --> Redis
     Alerting --> Notify[Notification Channel<br>email / webhook / dashboard]
@@ -23,8 +23,15 @@ graph TD
 ```mermaid
 graph LR
     subgraph ESP32 Device
-        Sensor[Sensor Read] --> Payload[Build JSON Payload<br>msg_id + device_id + value]
-        Payload --> Pub[MQTT Publish<br>QoS 1/2]
+        Switch[Toggle Switch ON?<br>polled in loop] -->|yes| Interval[Interval Elapsed?<br>PUBLISH_INTERVAL_MS]
+        Interval -->|yes| Sensor[DHT11 Read<br>temperature + humidity]
+        Sensor --> Payload[Build JSON Payload<br>msg_id + device_id + value]
+        Payload --> Online{Online?<br>WiFi + MQTT connected}
+        Online -->|yes| Pub[MQTT Publish<br>QoS 1/2]
+        Online -->|no| Outbox[(In-RAM Outbox<br>ring buffer, drop-oldest)]
+        Drain[drainOutbox<br>each loop tick] --> Outbox
+        Outbox -->|replay when online| Pub
+        Recon[Non-blocking reconnect<br>WiFi + MQTT every 5 s] -.-> Online
     end
 
     subgraph MQTT Broker
@@ -34,7 +41,7 @@ graph LR
 
     subgraph Ingestion Microservice
         Recv1[Receive Message] --> Dedup[Check msg_id<br>in seen-set]
-        Dedup -->|new| Store[Upsert to DB]
+        Dedup -->|new| Store[Insert into hypertable]
         Dedup -->|duplicate| Discard1[ACK & Discard]
         Store --> AddSeen[Add msg_id to seen-set]
         AddSeen --> ACK1[ACK to Broker]
@@ -63,7 +70,7 @@ sequenceDiagram
     Broker->>Svc: Deliver message (msg_id=X)
     Svc->>Redis: EXISTS msg_id=X?
     Redis-->>Svc: false (new)
-    Svc->>DB: UPSERT telemetry (msg_id=X)
+    Svc->>DB: INSERT telemetry (msg_id=X)
     Svc->>Redis: SET msg_id=X (TTL)
     Svc->>Broker: PUBACK
 
@@ -81,18 +88,19 @@ sequenceDiagram
 graph TD
     Root[telemetry] --> D1[esp32-001]
     Root --> D2[esp32-002]
-    Root --> DN[esp32-N]
+    Root --> D3[esp32-003]
 
     D1 --> D1T[temperature]
     D1 --> D1H[humidity]
     D2 --> D2T[temperature]
-    D2 --> D2P[pressure]
-    DN --> DNx[...]
+    D2 --> D2H[humidity]
+    D3 --> D3T[temperature]
+    D3 --> D3H[humidity]
 
     style Root fill:#f9f,stroke:#333
     style D1 fill:#bbf,stroke:#333
     style D2 fill:#bbf,stroke:#333
-    style DN fill:#bbf,stroke:#333
+    style D3 fill:#bbf,stroke:#333
 ```
 
 | Subscription Pattern | Matches |
@@ -127,11 +135,11 @@ graph TD
 
 | Component | Role |
 |---|---|
-| **ESP32 Devices** | Publish sensor telemetry over MQTT with unique msg_id |
+| **ESP32 Devices** | Three identical nodes (esp32-001/002/003). Each has a DHT11 sensor and a toggle switch on GPIO 27. While the switch is ON, the firmware publishes temperature + humidity readings over MQTT every `PUBLISH_INTERVAL_MS` (default 5 s) with a unique `msg_id`. When WiFi or the broker is unreachable, readings are queued in an in-RAM ring-buffer outbox (capacity `OUTBOX_CAPACITY`, drop-oldest) and replayed on reconnect — non-blocking reconnect attempts keep the sensor loop running throughout the outage |
 | **MQTT Broker (Mosquitto)** | Central pub/sub hub, QoS enforcement, topic routing |
 | **Ingestion Microservice** | Deduplicate, validate, and persist telemetry to DB |
 | **Alerting Microservice** | Evaluate threshold rules and fire notifications |
-| **Time-Series DB** | Store and query telemetry data |
+| **Time-Series DB (TimescaleDB)** | Postgres extension providing hypertables — `telemetry_readings` is partitioned on `received_at`, `alert_events` on `created_at`. Schema is managed via Flyway migrations (`V1__init_timescale.sql`) in each service. Because hypertables cannot enforce a UNIQUE constraint that omits the partitioning column, `msg_id` is **not** a primary key — deduplication is delegated entirely to Redis. |
 | **Redis** | Fast deduplication seen-set with TTL expiry |
 
 ## Testing Scenarios
@@ -143,4 +151,4 @@ graph TD
 | **Duplicate handling** | Publish identical msg_id multiple times | Verify single storage |
 | **Broker failure** | Kill and restart Mosquitto mid-stream | Data loss at QoS ≥ 1 |
 | **Service crash** | Stop ingestion, let messages queue, restart | Catch-up completeness |
-| **Network partition** | Simulate intermittent ESP32 connectivity | Reconnect and retry behaviour |
+| **Network partition** | Simulate intermittent ESP32 connectivity | Reconnect and retry behaviour; outbox queue depth vs. zero data loss up to capacity |

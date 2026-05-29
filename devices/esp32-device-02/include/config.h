@@ -17,9 +17,15 @@
 #define DHT_PIN       4
 #define DHT_TYPE      DHT11
 
-#define BUTTON_PIN    0
+#define SWITCH_PIN    27
 #define LED_PIN       2
 
+#define PUBLISH_INTERVAL_MS 5000
+
 #define MQTT_QOS      1
+
+#define OUTBOX_CAPACITY        256
+#define OUTBOX_DRAIN_PER_TICK  5
+#define RECONNECT_INTERVAL_MS  5000
 
 #endif

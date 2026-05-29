@@ -10,16 +10,55 @@ WiFiClient   wifiClient;
 PubSubClient mqttClient(wifiClient);
 DHT          dht(DHT_PIN, DHT_TYPE);
 
-volatile bool buttonPressed = false;
-unsigned long lastDebounce  = 0;
-const unsigned long DEBOUNCE_MS = 300;
+unsigned long lastPublishMs     = 0;
+unsigned long lastWifiAttemptMs = 0;
+unsigned long lastMqttAttemptMs = 0;
 static uint32_t msgCounter = 0;
 
-void IRAM_ATTR onButtonPress() {
-    unsigned long now = millis();
-    if (now - lastDebounce > DEBOUNCE_MS) {
-        buttonPressed = true;
-        lastDebounce  = now;
+struct OutboxEntry {
+    const char* topic;
+    char        payload[256];
+};
+
+static OutboxEntry outbox[OUTBOX_CAPACITY];
+static size_t outboxHead  = 0;
+static size_t outboxTail  = 0;
+static size_t outboxCount = 0;
+
+bool switchIsOn() {
+    return digitalRead(SWITCH_PIN) == LOW;
+}
+
+bool isOnline() {
+    return WiFi.status() == WL_CONNECTED && mqttClient.connected();
+}
+
+void outboxPush(const char* topic, const char* payload) {
+    if (outboxCount == OUTBOX_CAPACITY) {
+        outboxHead = (outboxHead + 1) % OUTBOX_CAPACITY;
+        outboxCount--;
+        Serial.println("[Outbox] FULL — dropping oldest entry");
+    }
+    outbox[outboxTail].topic = topic;
+    strlcpy(outbox[outboxTail].payload, payload, sizeof(outbox[outboxTail].payload));
+    outboxTail = (outboxTail + 1) % OUTBOX_CAPACITY;
+    outboxCount++;
+}
+
+void drainOutbox() {
+    if (!isOnline() || outboxCount == 0) return;
+
+    int sent = 0;
+    while (sent < OUTBOX_DRAIN_PER_TICK && outboxCount > 0 && isOnline()) {
+        OutboxEntry& e = outbox[outboxHead];
+        if (!mqttClient.publish(e.topic, e.payload, MQTT_QOS)) {
+            break;
+        }
+        Serial.printf("[Outbox] Replayed → %s  (remaining=%u)\n",
+                      e.topic, (unsigned)(outboxCount - 1));
+        outboxHead = (outboxHead + 1) % OUTBOX_CAPACITY;
+        outboxCount--;
+        sent++;
     }
 }
 
@@ -47,6 +86,31 @@ void syncNTP() {
     Serial.printf("\n[NTP] Time synced: %04d-%02d-%02dT%02d:%02d:%02dZ\n",
         timeInfo.tm_year + 1900, timeInfo.tm_mon + 1, timeInfo.tm_mday,
         timeInfo.tm_hour, timeInfo.tm_min, timeInfo.tm_sec);
+}
+
+void attemptWiFi() {
+    if (WiFi.status() == WL_CONNECTED) return;
+    unsigned long now = millis();
+    if (now - lastWifiAttemptMs < RECONNECT_INTERVAL_MS) return;
+    lastWifiAttemptMs = now;
+
+    Serial.printf("[WiFi] Reconnect attempt to %s...\n", WIFI_SSID);
+    WiFi.disconnect();
+    WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
+}
+
+void attemptMQTT() {
+    if (WiFi.status() != WL_CONNECTED) return;
+    if (mqttClient.connected())        return;
+    unsigned long now = millis();
+    if (now - lastMqttAttemptMs < RECONNECT_INTERVAL_MS) return;
+    lastMqttAttemptMs = now;
+
+    Serial.print("[MQTT] Reconnect attempt... ");
+    bool connected = (strlen(MQTT_USER) > 0)
+        ? mqttClient.connect(DEVICE_ID, MQTT_USER, MQTT_PASSWORD)
+        : mqttClient.connect(DEVICE_ID);
+    Serial.printf("%s (rc=%d)\n", connected ? "connected!" : "failed", mqttClient.state());
 }
 
 void connectMQTT() {
@@ -88,10 +152,18 @@ void publishReading(const char* topic, const char* sensorType,
     char payload[256];
     serializeJson(doc, payload, sizeof(payload));
 
-    bool ok = mqttClient.publish(topic, payload, MQTT_QOS);
+    bool ok = false;
+    if (isOnline()) {
+        ok = mqttClient.publish(topic, payload, MQTT_QOS);
+    }
 
-    Serial.printf("[MQTT] %s → %s  (QoS %d, %s)\n",
-                  topic, payload, MQTT_QOS, ok ? "sent" : "FAILED");
+    if (ok) {
+        Serial.printf("[MQTT] %s → %s  (QoS %d, sent)\n", topic, payload, MQTT_QOS);
+    } else {
+        outboxPush(topic, payload);
+        Serial.printf("[Outbox] Queued (offline/publish-fail) → %s  (depth=%u)\n",
+                      topic, (unsigned)outboxCount);
+    }
 }
 
 void readAndPublish() {
@@ -120,11 +192,9 @@ void setup() {
     Serial.printf("  Device ID: %s\n", DEVICE_ID);
     Serial.println("========================================\n");
 
-    pinMode(BUTTON_PIN, INPUT_PULLUP);
+    pinMode(SWITCH_PIN, INPUT_PULLUP);
     pinMode(LED_PIN, OUTPUT);
     digitalWrite(LED_PIN, LOW);
-
-    attachInterrupt(digitalPinToInterrupt(BUTTON_PIN), onButtonPress, FALLING);
 
     connectWiFi();
     syncNTP();
@@ -133,20 +203,22 @@ void setup() {
 
     dht.begin();
 
-    Serial.println("[Ready] Press the BOOT button to publish a reading.\n");
+    Serial.printf("[Ready] Flip the switch ON to publish every %lu ms.\n\n",
+                  (unsigned long)PUBLISH_INTERVAL_MS);
 }
 
 void loop() {
-    if (WiFi.status() != WL_CONNECTED) {
-        connectWiFi();
-    }
-    if (!mqttClient.connected()) {
-        connectMQTT();
-    }
+    attemptWiFi();
+    attemptMQTT();
     mqttClient.loop();
 
-    if (buttonPressed) {
-        buttonPressed = false;
-        readAndPublish();
+    drainOutbox();
+
+    if (switchIsOn()) {
+        unsigned long now = millis();
+        if (now - lastPublishMs >= PUBLISH_INTERVAL_MS) {
+            lastPublishMs = now;
+            readAndPublish();
+        }
     }
 }

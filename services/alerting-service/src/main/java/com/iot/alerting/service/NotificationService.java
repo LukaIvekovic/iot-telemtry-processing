@@ -11,7 +11,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 
 import java.time.Instant;
-import java.time.LocalDateTime;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
@@ -44,7 +43,7 @@ public class NotificationService {
         event.setValue(msg.getValue());
         event.setRuleName(ruleName);
         event.setSeverity(severity);
-        event.setCreatedAt(LocalDateTime.now());
+        event.setCreatedAt(Instant.now());
         alertEventRepository.save(event);
 
         log.warn("[ALERT][{}] device={} sensor={} value={} rule={}",

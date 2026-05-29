@@ -188,7 +188,7 @@ void readAndPublish() {
 void setup() {
     Serial.begin(115200);
     Serial.println("\n========================================");
-    Serial.println("  ESP32 Device 02 — Temp & Humidity");
+    Serial.println("  ESP32 Device 03 — Temp & Humidity");
     Serial.printf("  Device ID: %s\n", DEVICE_ID);
     Serial.println("========================================\n");
 

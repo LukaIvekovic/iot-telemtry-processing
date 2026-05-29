@@ -6,10 +6,9 @@ import com.iot.ingestion.entity.TelemetryReading;
 import com.iot.ingestion.repository.TelemetryRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 
 @Service
 public class IngestionService {
@@ -29,9 +28,8 @@ public class IngestionService {
     }
 
     public void processMessage(String topic, String payload) {
-        TelemetryMessage message = null;
         try {
-            message = objectMapper.readValue(payload, TelemetryMessage.class);
+            TelemetryMessage message = objectMapper.readValue(payload, TelemetryMessage.class);
 
             if (deduplicationService.isDuplicate(message.getMsgId())) {
                 log.info("[Dedup] Duplicate msg_id={}, discarding", message.getMsgId());
@@ -45,7 +43,7 @@ public class IngestionService {
             reading.setValue(message.getValue());
             reading.setUnit(message.getUnit());
             reading.setTimestamp(message.getTimestamp());
-            reading.setReceivedAt(LocalDateTime.now());
+            reading.setReceivedAt(Instant.now());
 
             telemetryRepository.save(reading);
             deduplicationService.markProcessed(message.getMsgId());
@@ -53,9 +51,6 @@ public class IngestionService {
             log.info("[Ingestion] Stored msg_id={} device={} sensor={} value={}",
                     message.getMsgId(), message.getDeviceId(), message.getSensor(), message.getValue());
 
-        } catch (DataIntegrityViolationException e) {
-            log.info("[Ingestion] DB duplicate (TTL-expired dedup) for msg_id={}",
-                    message != null ? message.getMsgId() : "unknown");
         } catch (Exception e) {
             log.error("[Ingestion] Failed to process message from topic={}: {}", topic, e.getMessage(), e);
         }

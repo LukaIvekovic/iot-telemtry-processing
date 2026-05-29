@@ -8,7 +8,7 @@ import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 
 @Entity
 @Table(name = "telemetry_readings")
@@ -30,6 +30,6 @@ public class TelemetryReading {
 
     private long timestamp;
 
-    @Column(name = "received_at")
-    private LocalDateTime receivedAt;
+    @Column(name = "received_at", columnDefinition = "TIMESTAMPTZ")
+    private Instant receivedAt;
 }
