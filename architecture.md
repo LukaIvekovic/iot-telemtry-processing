@@ -6,7 +6,6 @@
 graph TD
     ESP1[ESP32 #1<br>DHT11 + Switch] -->|MQTT publish<br>QoS 1/2| Broker[MQTT Broker<br>Mosquitto]
     ESP2[ESP32 #2<br>DHT11 + Switch] -->|MQTT publish<br>QoS 1/2| Broker
-    ESP3[ESP32 #3<br>DHT11 + Switch] -->|MQTT publish<br>QoS 1/2| Broker
 
     Broker -->|subscribe<br>telemetry/#| Ingestion[Ingestion Microservice]
     Broker -->|subscribe<br>telemetry/#| Alerting[Alerting Microservice]
@@ -88,19 +87,15 @@ sequenceDiagram
 graph TD
     Root[telemetry] --> D1[esp32-001]
     Root --> D2[esp32-002]
-    Root --> D3[esp32-003]
 
     D1 --> D1T[temperature]
     D1 --> D1H[humidity]
     D2 --> D2T[temperature]
     D2 --> D2H[humidity]
-    D3 --> D3T[temperature]
-    D3 --> D3H[humidity]
 
     style Root fill:#f9f,stroke:#333
     style D1 fill:#bbf,stroke:#333
     style D2 fill:#bbf,stroke:#333
-    style D3 fill:#bbf,stroke:#333
 ```
 
 | Subscription Pattern | Matches |
@@ -135,7 +130,7 @@ graph TD
 
 | Component | Role |
 |---|---|
-| **ESP32 Devices** | Three identical nodes (esp32-001/002/003). Each has a DHT11 sensor and a toggle switch on GPIO 27. While the switch is ON, the firmware publishes temperature + humidity readings over MQTT every `PUBLISH_INTERVAL_MS` (default 5 s) with a unique `msg_id`. When WiFi or the broker is unreachable, readings are queued in an in-RAM ring-buffer outbox (capacity `OUTBOX_CAPACITY`, drop-oldest) and replayed on reconnect — non-blocking reconnect attempts keep the sensor loop running throughout the outage |
+| **ESP32 Devices** | Two identical nodes (esp32-001/002). Each has a DHT11 sensor and a toggle switch on GPIO 27. While the switch is ON, the firmware publishes temperature + humidity readings over MQTT every `PUBLISH_INTERVAL_MS` (default 5 s) with a unique `msg_id`. When WiFi or the broker is unreachable, readings are queued in an in-RAM ring-buffer outbox (capacity `OUTBOX_CAPACITY`, drop-oldest) and replayed on reconnect — non-blocking reconnect attempts keep the sensor loop running throughout the outage |
 | **MQTT Broker (Mosquitto)** | Central pub/sub hub, QoS enforcement, topic routing |
 | **Ingestion Microservice** | Deduplicate, validate, and persist telemetry to DB |
 | **Alerting Microservice** | Evaluate threshold rules and fire notifications |
