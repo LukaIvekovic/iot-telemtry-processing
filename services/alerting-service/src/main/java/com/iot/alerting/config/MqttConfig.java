@@ -44,6 +44,7 @@ public class MqttConfig implements MqttCallbackExtended {
     @PostConstruct
     public void connect() throws MqttException {
         mqttClient = new MqttClient(broker, clientId, new MqttDefaultFilePersistence("/tmp/mqtt-" + clientId));
+        mqttClient.setManualAcks(true);
         mqttClient.setCallback(this);
 
         MqttConnectOptions options = new MqttConnectOptions();
@@ -76,12 +77,16 @@ public class MqttConfig implements MqttCallbackExtended {
     @Override
     public void connectComplete(boolean reconnect, String serverURI) {
         log.info("Connected to MQTT broker: {} (reconnect: {})", serverURI, reconnect);
-        try {
-            mqttClient.subscribe(topic, qos);
-            log.info("Subscribed to topic: {} with QoS: {}", topic, qos);
-        } catch (MqttException e) {
-            log.error("Error subscribing to topic: {}", topic, e);
-        }
+        Thread subscribeThread = new Thread(() -> {
+            try {
+                mqttClient.subscribe(topic, qos);
+                log.info("Subscribed to topic: {} with QoS: {}", topic, qos);
+            } catch (MqttException e) {
+                log.error("Error subscribing to topic: {}", topic, e);
+            }
+        }, "mqtt-subscribe");
+        subscribeThread.setDaemon(true);
+        subscribeThread.start();
     }
 
     @Override
@@ -92,7 +97,13 @@ public class MqttConfig implements MqttCallbackExtended {
     @Override
     public void messageArrived(String topic, MqttMessage message) {
         String payload = new String(message.getPayload());
-        alertingService.processMessage(topic, payload);
+        if (alertingService.processMessage(topic, payload)) {
+            try {
+                mqttClient.messageArrivedComplete(message.getId(), message.getQos());
+            } catch (MqttException e) {
+                log.error("Failed to acknowledge message id={}", message.getId(), e);
+            }
+        }
     }
 
     @Override

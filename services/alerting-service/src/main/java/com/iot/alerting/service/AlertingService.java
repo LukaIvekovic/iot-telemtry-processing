@@ -28,13 +28,19 @@ public class AlertingService {
         this.objectMapper = objectMapper;
     }
 
-    public void processMessage(String topic, String payload) {
+    public boolean processMessage(String topic, String payload) {
+        TelemetryMessage message;
         try {
-            TelemetryMessage message = objectMapper.readValue(payload, TelemetryMessage.class);
+            message = objectMapper.readValue(payload, TelemetryMessage.class);
+        } catch (Exception e) {
+            log.error("[Alerting] Discarding unparseable message from topic={}: {}", topic, e.getMessage());
+            return true;
+        }
 
+        try {
             if (deduplicationService.isDuplicate(message.getMsgId())) {
                 log.info("[Dedup] Duplicate msg_id={}, discarding", message.getMsgId());
-                return;
+                return true;
             }
 
             AlertRule matchingRule = alertRulesConfig.getRules().stream()
@@ -44,7 +50,7 @@ public class AlertingService {
 
             if (matchingRule == null) {
                 deduplicationService.markProcessed(message.getMsgId());
-                return;
+                return true;
             }
 
             if (message.getValue() < matchingRule.getMin() || message.getValue() > matchingRule.getMax()) {
@@ -56,9 +62,12 @@ public class AlertingService {
 
             log.info("[Alerting] Processed msg_id={} device={} sensor={} value={}",
                     message.getMsgId(), message.getDeviceId(), message.getSensor(), message.getValue());
+            return true;
 
         } catch (Exception e) {
-            log.error("Error processing MQTT message: {}", e.getMessage(), e);
+            log.error("[Alerting] Transient failure for msg_id={}, leaving unacknowledged for redelivery: {}",
+                    message.getMsgId(), e.getMessage());
+            return false;
         }
     }
 

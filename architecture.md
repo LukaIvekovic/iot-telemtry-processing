@@ -142,7 +142,7 @@ graph TD
 | Category | Scenario | What to Measure |
 |---|---|---|
 | **Performance** | N devices at M msg/sec | End-to-end latency, sustained throughput |
-| **QoS comparison** | QoS 0 vs 1 vs 2 under load | Message loss rate |
+| **QoS comparison** | QoS 0 vs QoS 1/2 under load (subscriber at QoS 1 downgrades QoS 2, so 1 and 2 are reported jointly) | Message loss rate |
 | **Duplicate handling** | Publish identical msg_id multiple times | Verify single storage |
 | **Broker failure** | Kill and restart Mosquitto mid-stream | Data loss at QoS ≥ 1 |
 | **Service crash** | Stop ingestion, let messages queue, restart | Catch-up completeness |

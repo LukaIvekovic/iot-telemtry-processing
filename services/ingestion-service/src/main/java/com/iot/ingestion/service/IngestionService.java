@@ -27,13 +27,19 @@ public class IngestionService {
         this.objectMapper = objectMapper;
     }
 
-    public void processMessage(String topic, String payload) {
+    public boolean processMessage(String topic, String payload) {
+        TelemetryMessage message;
         try {
-            TelemetryMessage message = objectMapper.readValue(payload, TelemetryMessage.class);
+            message = objectMapper.readValue(payload, TelemetryMessage.class);
+        } catch (Exception e) {
+            log.error("[Ingestion] Discarding unparseable message from topic={}: {}", topic, e.getMessage());
+            return true;
+        }
 
+        try {
             if (deduplicationService.isDuplicate(message.getMsgId())) {
                 log.info("[Dedup] Duplicate msg_id={}, discarding", message.getMsgId());
-                return;
+                return true;
             }
 
             TelemetryReading reading = new TelemetryReading();
@@ -50,9 +56,12 @@ public class IngestionService {
 
             log.info("[Ingestion] Stored msg_id={} device={} sensor={} value={}",
                     message.getMsgId(), message.getDeviceId(), message.getSensor(), message.getValue());
+            return true;
 
         } catch (Exception e) {
-            log.error("[Ingestion] Failed to process message from topic={}: {}", topic, e.getMessage(), e);
+            log.error("[Ingestion] Transient failure for msg_id={}, leaving unacknowledged for redelivery: {}",
+                    message.getMsgId(), e.getMessage());
+            return false;
         }
     }
 }
