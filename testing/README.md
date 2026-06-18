@@ -58,12 +58,22 @@ Ista poruka objavljena više puta; očekuje se 1 spremljeni red.
 
 ## T4: Ispad brokera
 
-Put izlaznog spremnika (engl. *outbox*) na ESP32 uređaju tijekom ispada brokera.
+Put izlaznog spremnika (engl. *outbox*) na fizičkom ESP32 uređaju tijekom ispada
+brokera. Skripta sama otvara serijski port, gasi i pokreće broker po isteku
+zadanog prozora, parsira serijski tok (vršna dubina, `[Outbox] FULL`, ponovna
+isporuka) i ispisuje redak za tablicu rezultata. Sklopka na uređaju mora biti
+uključena, a PlatformIO Serial Monitor zatvoren (port zauzima samo jedan program).
+
+Varijanta ispod kapaciteta (~5 min, bez gubitka):
 
 ```powershell
-docker compose stop mosquitto
-Start-Sleep -Seconds 15
-docker compose start mosquitto
+./testing/broker-failure-test.ps1 -Port COM3 -OutageSeconds 300 -Label ispod-kapaciteta
+```
+
+Varijanta iznad kapaciteta (~15 min, spremnik se prepuni, očekuje se gubitak):
+
+```powershell
+./testing/broker-failure-test.ps1 -Port COM3 -OutageSeconds 900 -Label iznad-kapaciteta
 ```
 
 ## T5: Pad i ponovno pokretanje servisa
